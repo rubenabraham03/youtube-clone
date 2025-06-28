@@ -16,8 +16,7 @@ app.post("/process-video", (req, res) => {
     .videoCodec("libx264")
     .audioCodec("aac")
     .outputOptions([
-        "-vf", "scale=trunc(iw*360/ih/2)*2:360"
-,
+        "-vf",  "scale=trunc(iw*360/ih/2)*2:360",
         "-movflags", "faststart"
   ])
     .on('end', function() {
