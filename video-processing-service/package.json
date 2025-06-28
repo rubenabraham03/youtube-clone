@@ -1,5 +1,5 @@
 {
-  "name": "Video Processing Service",
+  "name": "video-processing-service",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
