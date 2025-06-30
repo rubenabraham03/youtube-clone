@@ -1,36 +1,71 @@
-import express from "express";
-import ffmpeg from "fluent-ffmpeg"
+// index.ts
+import express from 'express';
+import {
+  uploadProcessedVideo,
+  downloadRawVideo,
+  deleteRawVideo,
+  deleteProcessedVideo,
+  convertVideo,
+  setupDirectories
+} from './storage';
+
+setupDirectories();
 
 const app = express();
 app.use(express.json());
 
-app.post("/process-video", (req, res) => {
-    const inputFilePath = req.body.inputFilePath
-    const outputFilePath = req.body.outputFilePath
+interface PubSubPayload {
+  message: {
+    data: string;
+  };
+}
 
-    if (!inputFilePath || !outputFilePath){
-        res.status(400).send('Bad request, missing file path.')
+app.post<{}, any, PubSubPayload>(
+  '/process-video',
+  async (req, res): Promise<void> => {
+    let filename: string;
+
+    // decode and parse
+    try {
+      const raw = Buffer.from(req.body.message.data, 'base64').toString('utf8');
+      const parsed = JSON.parse(raw) as { name?: string };
+      if (!parsed.name) throw new Error('no name');
+      filename = parsed.name;
+    } catch (err) {
+      console.error(err);
+      res.status(400).send('Bad Request: invalid Pub/Sub message');
+      return;           // bare return, no value
     }
 
-  ffmpeg(inputFilePath)
-    .videoCodec("libx264")
-    .audioCodec("aac")
-    .outputOptions([
-        "-vf",  "scale=trunc(iw*360/ih/2)*2:360",
-        "-movflags", "faststart"
-  ])
-    .on('end', function() {
-        console.log('Processing finished successfully');
-        res.status(200).send('Processing finished successfully');
-    })
-    .on('error', function(err: any) {
-        console.log('An error occurred: ' + err.message);
-        res.status(500).send('An error occurred: ' + err.message);
-    })
-    .save(outputFilePath);
-});
+    const inputFile = filename;
+    const outputFile = `processed-${filename}`;
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
+    try {
+      await downloadRawVideo(inputFile);
+      await convertVideo(inputFile, outputFile);
+      await uploadProcessedVideo(outputFile);
+    } catch (err) {
+      console.error(err);
+      await Promise.all([
+        deleteRawVideo(inputFile),
+        deleteProcessedVideo(outputFile),
+      ]);
+      res.status(500).send('Processing failed');
+      return;
+    }
+
+    // clean up
+    await Promise.all([
+      deleteRawVideo(inputFile),
+      deleteProcessedVideo(outputFile),
+    ]);
+
+    res.status(200).send('Processing finished successfully');
+    // function falls off here, implicitly returning void
+  }
+);
+
+const PORT = process.env.PORT ?? 3000;
+app.listen(PORT, () => {
+  console.log(`Listening on port ${PORT}`);
 });
