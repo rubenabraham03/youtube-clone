@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
-
+import { getFunctions } from "firebase/functions";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -14,6 +14,8 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+
+export const functions = getFunctions();
 
 /**
  * Signs the user in with a Google popup.
@@ -38,3 +40,4 @@ export function signOut() {
 export function onAuthStateChangedHelper(callback: (user: User | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
+

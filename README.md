@@ -1,3 +1,3 @@
 # youtube-clone
 
-Hello this is ruben and this is  my first attempt at a youtube clone!
+This is my attempt at a Youtube clone! Hopefully it looks alright....
