@@ -1,4 +1,3 @@
-// index.ts
 import express from 'express';
 import {
   uploadProcessedVideo,
@@ -8,6 +7,8 @@ import {
   convertVideo,
   setupDirectories
 } from './storage';
+
+import { isVideoNew, setVideo } from "./firebase";
 
 setupDirectories();
 
@@ -34,34 +35,60 @@ app.post<{}, any, PubSubPayload>(
     } catch (err) {
       console.error(err);
       res.status(400).send('Bad Request: invalid Pub/Sub message');
-      return;           // bare return, no value
+      return;
     }
 
     const inputFile = filename;
     const outputFile = `processed-${filename}`;
+    const videoId = filename.split('.')[0]; // e.g. UID-DATE from <UID>-<DATE>.<ext>
 
     try {
+      // Check if video is new
+      if (!await isVideoNew(videoId)) {
+        res.status(400).send('Bad Request: video already processing or processed.');
+        return;
+      }
+
+      // Mark video as processing
+      await setVideo(videoId, {
+        id: videoId,
+        uid: videoId.split('-')[0],
+        status: 'processing',
+      });
+
+      // Download raw video
       await downloadRawVideo(inputFile);
+
+      // Convert/process video
       await convertVideo(inputFile, outputFile);
+
+      // Upload processed video
       await uploadProcessedVideo(outputFile);
-    } catch (err) {
-      console.error(err);
+
+      // Mark video as processed with filename
+      await setVideo(videoId, {
+        status: 'processed',
+        filename: outputFile,
+      });
+
+      // Clean up: delete raw and processed videos from storage
       await Promise.all([
         deleteRawVideo(inputFile),
         deleteProcessedVideo(outputFile),
       ]);
+
+      res.status(200).send('Processing finished successfully');
+    } catch (err) {
+      console.error(err);
+
+      // Clean up even on failure
+      await Promise.all([
+        deleteRawVideo(inputFile),
+        deleteProcessedVideo(outputFile),
+      ]);
+
       res.status(500).send('Processing failed');
-      return;
     }
-
-    // clean up
-    await Promise.all([
-      deleteRawVideo(inputFile),
-      deleteProcessedVideo(outputFile),
-    ]);
-
-    res.status(200).send('Processing finished successfully');
-    // function falls off here, implicitly returning void
   }
 );
 
